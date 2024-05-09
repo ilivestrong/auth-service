@@ -9,6 +9,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/ilivestrong/auth-service/internal"
+
 	"github.com/ilivestrong/auth-service/internal/models"
 	"github.com/ilivestrong/auth-service/internal/persist"
 	"github.com/ilivestrong/auth-service/internal/protos/gen/auth/v1/authv1connect"
@@ -53,15 +54,26 @@ func main() {
 
 	tokenExpiryInMinutes, err := strconv.Atoi(mustGetEnv("TOKEN_EXPIRY_IN_MINUTES"))
 	if err != nil {
-		options.TokenExpiryInMinutes = 2 // 2 minutes default token expiry
+		options.TokenExpiryInMinutes = 2
 	}
 	options.TokenExpiryInMinutes = tokenExpiryInMinutes
 
-	profileRepo := persist.NewProfileRepository(bootDB(options))
+	loggedInUsersCache := internal.NewInMemoryCache()
+
+	db := bootDB(options)
+	profileRepo := persist.NewProfileRepository(db)
+	eventRepo := persist.NewEventRepository(db)
+
 	mqclient := mq.NewOtpMQClient(bootMQ(options), profileRepo)
 	authenticator := internal.NewAuthenticator(options.TokenExpiryInMinutes)
-	authSvc := internal.NewAuthService(profileRepo, mqclient, authenticator)
-	interceptors := connect.WithInterceptors(internal.NewTokenInterceptor(authenticator))
+	authSvc := internal.NewAuthService(
+		profileRepo,
+		eventRepo,
+		mqclient,
+		authenticator,
+		loggedInUsersCache,
+	)
+	interceptors := connect.WithInterceptors(internal.NewTokenInterceptor(authenticator, loggedInUsersCache))
 
 	go mqclient.Consume()
 
@@ -85,7 +97,7 @@ func bootDB(options *Options) *gorm.DB {
 	if err != nil {
 		log.Fatalf("failed to open db connection, %v", err)
 	}
-	db.AutoMigrate(&models.Profile{})
+	db.AutoMigrate(&models.Profile{}, models.Event{})
 	return db
 }
 

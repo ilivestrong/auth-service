@@ -22,7 +22,7 @@ message VerifyPhoneNumberRequest {
 }
 
 message VerifyPhoneNumberResponse {
-  bool   verified = 1;
+  bool verified = 1;
 }
 
 message LoginWithPhoneNumberRequest {
@@ -31,7 +31,7 @@ message LoginWithPhoneNumberRequest {
 }
 
 message LoginWithPhoneNumberResponse {
-  string   session_token = 1;
+  string session_token = 1;
 }
 
 message GetProfileRequest {}
@@ -44,9 +44,15 @@ message GetProfileResponse {
   string created_at = 5;
 }
 
+message LogoutRequest {}
+message LogoutResponse {
+  string message = 1;
+}
+
 service AuthService {
   rpc SignupWithPhoneNumber(SignupWithPhoneNumberRequest) returns (SignupWithPhoneNumberResponse) {}
   rpc VerifyPhoneNumber(VerifyPhoneNumberRequest) returns (VerifyPhoneNumberResponse) {}
   rpc LoginWithPhoneNumber(LoginWithPhoneNumberRequest) returns (LoginWithPhoneNumberResponse) {}
   rpc GetProfile(GetProfileRequest) returns (GetProfileResponse) {}
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {}
 }

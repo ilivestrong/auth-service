@@ -44,6 +44,8 @@ const (
 	AuthServiceLoginWithPhoneNumberProcedure = "/auth.v1.AuthService/LoginWithPhoneNumber"
 	// AuthServiceGetProfileProcedure is the fully-qualified name of the AuthService's GetProfile RPC.
 	AuthServiceGetProfileProcedure = "/auth.v1.AuthService/GetProfile"
+	// AuthServiceLogoutProcedure is the fully-qualified name of the AuthService's Logout RPC.
+	AuthServiceLogoutProcedure = "/auth.v1.AuthService/Logout"
 )
 
 // These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
@@ -53,6 +55,7 @@ var (
 	authServiceVerifyPhoneNumberMethodDescriptor     = authServiceServiceDescriptor.Methods().ByName("VerifyPhoneNumber")
 	authServiceLoginWithPhoneNumberMethodDescriptor  = authServiceServiceDescriptor.Methods().ByName("LoginWithPhoneNumber")
 	authServiceGetProfileMethodDescriptor            = authServiceServiceDescriptor.Methods().ByName("GetProfile")
+	authServiceLogoutMethodDescriptor                = authServiceServiceDescriptor.Methods().ByName("Logout")
 )
 
 // AuthServiceClient is a client for the auth.v1.AuthService service.
@@ -61,6 +64,7 @@ type AuthServiceClient interface {
 	VerifyPhoneNumber(context.Context, *connect.Request[v1.VerifyPhoneNumberRequest]) (*connect.Response[v1.VerifyPhoneNumberResponse], error)
 	LoginWithPhoneNumber(context.Context, *connect.Request[v1.LoginWithPhoneNumberRequest]) (*connect.Response[v1.LoginWithPhoneNumberResponse], error)
 	GetProfile(context.Context, *connect.Request[v1.GetProfileRequest]) (*connect.Response[v1.GetProfileResponse], error)
+	Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the auth.v1.AuthService service. By default, it uses
@@ -97,6 +101,12 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceGetProfileMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
+		logout: connect.NewClient[v1.LogoutRequest, v1.LogoutResponse](
+			httpClient,
+			baseURL+AuthServiceLogoutProcedure,
+			connect.WithSchema(authServiceLogoutMethodDescriptor),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -106,6 +116,7 @@ type authServiceClient struct {
 	verifyPhoneNumber     *connect.Client[v1.VerifyPhoneNumberRequest, v1.VerifyPhoneNumberResponse]
 	loginWithPhoneNumber  *connect.Client[v1.LoginWithPhoneNumberRequest, v1.LoginWithPhoneNumberResponse]
 	getProfile            *connect.Client[v1.GetProfileRequest, v1.GetProfileResponse]
+	logout                *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
 }
 
 // SignupWithPhoneNumber calls auth.v1.AuthService.SignupWithPhoneNumber.
@@ -128,12 +139,18 @@ func (c *authServiceClient) GetProfile(ctx context.Context, req *connect.Request
 	return c.getProfile.CallUnary(ctx, req)
 }
 
+// Logout calls auth.v1.AuthService.Logout.
+func (c *authServiceClient) Logout(ctx context.Context, req *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error) {
+	return c.logout.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the auth.v1.AuthService service.
 type AuthServiceHandler interface {
 	SignupWithPhoneNumber(context.Context, *connect.Request[v1.SignupWithPhoneNumberRequest]) (*connect.Response[v1.SignupWithPhoneNumberResponse], error)
 	VerifyPhoneNumber(context.Context, *connect.Request[v1.VerifyPhoneNumberRequest]) (*connect.Response[v1.VerifyPhoneNumberResponse], error)
 	LoginWithPhoneNumber(context.Context, *connect.Request[v1.LoginWithPhoneNumberRequest]) (*connect.Response[v1.LoginWithPhoneNumberResponse], error)
 	GetProfile(context.Context, *connect.Request[v1.GetProfileRequest]) (*connect.Response[v1.GetProfileResponse], error)
+	Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -166,6 +183,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceGetProfileMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceLogoutHandler := connect.NewUnaryHandler(
+		AuthServiceLogoutProcedure,
+		svc.Logout,
+		connect.WithSchema(authServiceLogoutMethodDescriptor),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/auth.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceSignupWithPhoneNumberProcedure:
@@ -176,6 +199,8 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceLoginWithPhoneNumberHandler.ServeHTTP(w, r)
 		case AuthServiceGetProfileProcedure:
 			authServiceGetProfileHandler.ServeHTTP(w, r)
+		case AuthServiceLogoutProcedure:
+			authServiceLogoutHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -199,4 +224,8 @@ func (UnimplementedAuthServiceHandler) LoginWithPhoneNumber(context.Context, *co
 
 func (UnimplementedAuthServiceHandler) GetProfile(context.Context, *connect.Request[v1.GetProfileRequest]) (*connect.Response[v1.GetProfileResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("auth.v1.AuthService.GetProfile is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("auth.v1.AuthService.Logout is not implemented"))
 }

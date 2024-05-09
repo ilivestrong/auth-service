@@ -8,29 +8,36 @@ import (
 	"connectrpc.com/connect"
 )
 
-const tokenHeader = "authorization"
+const (
+	tokenHeader   = "authorization"
+	RpcGetProfile = "GetProfile"
+	RpcLogout     = "Logout"
+
+	PhoneNumberHeader = "x-phone-number"
+)
 
 var (
 	ErrInvalidToken = errors.New("invalid token provided")
 	ErrTokenMissing = errors.New("no token provided")
 
-	securedAPIs = map[string]struct{}{"GetProfile": {}}
+	securedAPIs = map[string]struct{}{RpcGetProfile: {}, RpcLogout: {}}
 )
 
-func NewTokenInterceptor(auth SessionAuthenticator) connect.UnaryInterceptorFunc {
+func NewTokenInterceptor(auth SessionAuthenticator, cache Cache) connect.UnaryInterceptorFunc {
 	interceptor := func(next connect.UnaryFunc) connect.UnaryFunc {
 		return connect.UnaryFunc(func(
 			ctx context.Context,
 			req connect.AnyRequest,
 		) (connect.AnyResponse, error) {
 			urlBits := strings.Split(req.Spec().Procedure, "/")
-			if _, ok := securedAPIs[urlBits[len(urlBits)-1]]; !ok {
+			rpcinvoked := urlBits[len(urlBits)-1]
+
+			if _, ok := securedAPIs[rpcinvoked]; !ok {
 				return next(ctx, req)
 			}
 
 			authHeaders := req.Header().Get(tokenHeader)
 			headerSlice := strings.Split(authHeaders, " ")
-
 			if len(headerSlice) < 2 {
 				return nil, connect.NewError(
 					connect.CodeUnauthenticated,
@@ -39,7 +46,6 @@ func NewTokenInterceptor(auth SessionAuthenticator) connect.UnaryInterceptorFunc
 			}
 
 			tokenString := headerSlice[1]
-
 			if tokenString == "" {
 				return nil, connect.NewError(
 					connect.CodeUnauthenticated,
@@ -55,7 +61,14 @@ func NewTokenInterceptor(auth SessionAuthenticator) connect.UnaryInterceptorFunc
 				)
 			}
 
-			req.Header().Set("x-phone-number", phoneNumber)
+			if rpcinvoked == RpcLogout {
+				if exists := cache.Get(phoneNumber); exists {
+					req.Header().Set(PhoneNumberHeader, phoneNumber)
+				}
+			} else {
+				req.Header().Set(PhoneNumberHeader, phoneNumber)
+			}
+
 			return next(ctx, req)
 		})
 	}

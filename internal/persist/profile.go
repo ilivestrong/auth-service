@@ -5,14 +5,20 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ilivestrong/auth-service/internal/models"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
 
 var (
-	ErrCreateProfileFailed = errors.New("failed to create profile")
-	ErrUpdateProfileFailed = errors.New("failed to update profile")
-	ErrGetProfileFailed    = errors.New("failed to get profile")
-	ErrProfileNotFound     = errors.New("profile not found")
+	ErrCreateProfileFailed  = errors.New("failed to create profile")
+	ErrUpdateProfileFailed  = errors.New("failed to update profile")
+	ErrGetProfileFailed     = errors.New("failed to get profile")
+	ErrProfileNotFound      = errors.New("profile not found")
+	ErrProfileAlreadyExists = errors.New("profile with this phone number already exists")
+)
+
+const (
+	PGDuplicateKeyErrorCode = "23505"
 )
 
 type (
@@ -37,8 +43,13 @@ func (pr *profileRepository) Create(phone_number string, name string) (string, e
 	result := pr.db.Create(newProfile)
 
 	if result.Error != nil || result.RowsAffected == 0 {
+
+		if pgErr, ok := result.Error.(*pgconn.PgError); ok && pgErr.Code == PGDuplicateKeyErrorCode {
+			return "", ErrProfileAlreadyExists
+		}
 		return "", ErrCreateProfileFailed
 	}
+
 	return newProfile.ID, nil
 }
 
