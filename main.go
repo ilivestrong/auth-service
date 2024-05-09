@@ -5,7 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 
 	"connectrpc.com/connect"
 	"github.com/ilivestrong/auth-service/internal"
@@ -64,7 +66,8 @@ func main() {
 	profileRepo := persist.NewProfileRepository(db)
 	eventRepo := persist.NewEventRepository(db)
 
-	mqclient := mq.NewOtpMQClient(bootMQ(options), profileRepo)
+	amqp := bootMQ(options)
+	mqclient := mq.NewOtpMQClient(amqp, profileRepo)
 	authenticator := internal.NewAuthenticator(options.TokenExpiryInMinutes)
 	authSvc := internal.NewAuthService(
 		profileRepo,
@@ -84,9 +87,9 @@ func main() {
 	mux2.Handle(API_Prefix, http.StripPrefix("/api", mux))
 
 	log.Printf("listening at localhost:%s\n", options.Port)
-	if err := http.ListenAndServe(fmt.Sprintf("localhost:%s", options.Port), mux2); err != nil {
-		log.Panicf("failed to launch auth-service: %v", err)
-	}
+	go http.ListenAndServe(fmt.Sprintf("localhost:%s", options.Port), mux2)
+
+	shutdownOnSignal(db, amqp)
 }
 
 func bootDB(options *Options) *gorm.DB {
@@ -115,4 +118,31 @@ func mustGetEnv(key string) string {
 		log.Fatalf("failed to get env for: %s", key)
 	}
 	return v
+}
+
+func waitForShutdownSignal() string {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+
+	sig := <-c
+
+	return sig.String()
+}
+
+func shutdownOnSignal(db *gorm.DB, amqp *amqp.Connection) {
+	signalName := waitForShutdownSignal()
+	fmt.Printf("recieved signal: %s starting shutdown...\n", signalName)
+
+	if db != nil {
+		if dbIns, err := db.DB(); err == nil {
+			dbIns.Close()
+			log.Println("db connection closed")
+		}
+	}
+
+	if amqp != nil {
+		if err := amqp.Close(); err == nil {
+			log.Println("amqp connection closed")
+		}
+	}
 }
